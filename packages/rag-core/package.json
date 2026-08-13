@@ -1,0 +1,29 @@
+{
+  "name": "@open-rag/core",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "format:check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@langchain/core": "1.2.6",
+    "@langchain/google": "0.2.1",
+    "@langchain/langgraph": "1.4.9",
+    "@langchain/langgraph-checkpoint-postgres": "1.0.4",
+    "@langchain/openai": "1.5.7",
+    "@supabase/supabase-js": "2.112.3",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "26.2.0",
+    "typescript": "6.0.3",
+    "vitest": "4.1.10"
+  }
+}

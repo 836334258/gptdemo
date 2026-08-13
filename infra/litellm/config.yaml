@@ -1,0 +1,23 @@
+model_list:
+  - model_name: chat-default
+    litellm_params:
+      model: gemini/gemini-3.6-flash
+      api_key: os.environ/GOOGLE_API_KEY
+      timeout: 120
+  - model_name: context-compressor
+    litellm_params:
+      model: gemini/gemini-3.6-flash
+      api_key: os.environ/GOOGLE_API_KEY
+      timeout: 90
+
+router_settings:
+  num_retries: 2
+  retry_after: 2
+  routing_strategy: simple-shuffle
+
+litellm_settings:
+  drop_params: true
+  request_timeout: 120
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY

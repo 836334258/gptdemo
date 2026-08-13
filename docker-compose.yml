@@ -1,0 +1,60 @@
+name: open-rag-chat
+
+services:
+  valkey:
+    image: valkey/valkey:8.1.3-alpine
+    command: ["valkey-server", "--appendonly", "yes"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - valkey-data:/data
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  litellm:
+    image: ghcr.io/berriai/litellm:main-stable
+    command: ["--config", "/app/config.yaml", "--port", "4000"]
+    ports:
+      - "4000:4000"
+    environment:
+      GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
+      LITELLM_MASTER_KEY: ${LITELLM_API_KEY:-local-dev-key}
+    volumes:
+      - ./infra/litellm/config.yaml:/app/config.yaml:ro
+
+  phoenix:
+    image: arizephoenix/phoenix:latest-nonroot
+    ports:
+      - "6006:6006"
+      - "4317:4317"
+    environment:
+      PHOENIX_WORKING_DIR: /data
+      PHOENIX_TELEMETRY_ENABLED: "false"
+    volumes:
+      - phoenix-data:/data
+
+  embedding:
+    profiles: ["models"]
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
+    command: ["--model-id", "BAAI/bge-m3", "--port", "80"]
+    ports:
+      - "8081:80"
+    volumes:
+      - model-cache:/data
+
+  reranker:
+    profiles: ["models"]
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
+    command: ["--model-id", "Alibaba-NLP/gte-multilingual-reranker-base", "--port", "80"]
+    ports:
+      - "8082:80"
+    volumes:
+      - model-cache:/data
+
+volumes:
+  valkey-data:
+  phoenix-data:
+  model-cache:
