@@ -18,6 +18,9 @@ router_settings:
 litellm_settings:
   drop_params: true
   request_timeout: 120
+  # 成功和失败都导出 OTEL span，Phoenix 才能同时看到延迟、token、异常和模型元数据。
+  success_callback: ["otel"]
+  failure_callback: ["otel"]
 
 general_settings:
   master_key: os.environ/LITELLM_MASTER_KEY

@@ -14,19 +14,38 @@ services:
       timeout: 3s
       retries: 5
 
+  phoenix-init:
+    image: busybox:1.37.0-musl
+    user: "0:0"
+    command: ["sh", "-c", "chown -R 65532:65532 /data"]
+    volumes:
+      - phoenix-data:/data
+    restart: "no"
+
   litellm:
     image: ghcr.io/berriai/litellm:main-stable
     command: ["--config", "/app/config.yaml", "--port", "4000"]
+    depends_on:
+      phoenix:
+        condition: service_started
     ports:
       - "4000:4000"
     environment:
       GOOGLE_API_KEY: ${GOOGLE_API_KEY:-}
       LITELLM_MASTER_KEY: ${LITELLM_API_KEY:-local-dev-key}
+      # LiteLLM 使用 OTLP/HTTP 将每次模型成功与失败调用写入本地 Phoenix。
+      OTEL_EXPORTER: otlp_http
+      OTEL_EXPORTER_OTLP_ENDPOINT: http://phoenix:6006
+      OTEL_SERVICE_NAME: ${OTEL_SERVICE_NAME:-open-rag-litellm}
+      OTEL_ENVIRONMENT_NAME: ${OTEL_ENVIRONMENT_NAME:-local}
     volumes:
       - ./infra/litellm/config.yaml:/app/config.yaml:ro
 
   phoenix:
     image: arizephoenix/phoenix:latest-nonroot
+    depends_on:
+      phoenix-init:
+        condition: service_completed_successfully
     ports:
       - "6006:6006"
       - "4317:4317"

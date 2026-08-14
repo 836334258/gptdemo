@@ -44,7 +44,7 @@ export type StreamEvent =
   | { type: "citation"; evidence: Evidence }
   | { type: "context"; action: ContextAction; estimatedTokens: number }
   | { type: "done"; conversationId: string }
-  | { type: "error"; code: string; message: string };
+  | { type: "error"; code: string; message: string; requestId?: string };
 
 export type ContextAction = "none" | "artifactize" | "summarize" | "emergency";
 

@@ -5,12 +5,13 @@ import {
   type Evidence,
   type StreamEvent,
 } from "@open-rag/core";
-import { ZodError } from "zod";
+import { toPublicChatError } from "@/lib/chat-error";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID();
   // 在创建流之前校验请求，这样格式错误会得到明确的 HTTP 400，
   // 而不是已经返回 200 后才在 NDJSON 中混入一个错误事件。
   const parsed = ChatRequestSchema.safeParse(await request.json().catch(() => undefined));
@@ -54,10 +55,14 @@ export async function POST(request: Request) {
           conversationId: body.conversationId,
         })}\n`));
       } catch (error) {
+        const publicError = toPublicChatError(error);
+        // 浏览器只收到清洗后的错误；完整异常和 requestId 留在服务端日志中用于排障。
+        console.error("[chat] request failed", { requestId, error });
         const event: StreamEvent = {
           type: "error",
-          code: error instanceof ZodError ? "INVALID_REQUEST" : "CHAT_FAILED",
-          message: error instanceof Error ? error.message : "Unknown chat error",
+          code: publicError.code,
+          message: publicError.message,
+          requestId,
         };
         controller.enqueue(encoder.encode(`${JSON.stringify(event)}\n`));
       } finally {

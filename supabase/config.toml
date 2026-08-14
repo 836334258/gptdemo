@@ -15,6 +15,12 @@ major_version = 17
 enabled = true
 port = 54323
 
+# 本项目用 Phoenix 观察模型/RAG 链路，不依赖 Supabase Logflare。
+# Windows 上 Vector 需要访问 Docker 2375 明文端口；显式关闭可避免容器重启循环，
+# 同时不影响 PostgreSQL 中的 pgvector 扩展和知识库向量检索。
+[analytics]
+enabled = false
+
 [storage]
 enabled = true
 file_size_limit = "100MiB"

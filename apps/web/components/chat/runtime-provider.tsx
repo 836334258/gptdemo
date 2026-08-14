@@ -13,17 +13,23 @@ import type { ReactNode } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatRequest, Evidence, StreamEvent } from "@open-rag/core";
 import { getSupabaseBrowserClient } from "@/lib/supabase-browser";
+import { ChatStreamError, toUserFacingChatError } from "@/lib/chat-error";
 
 type RuntimeOptions = Pick<ChatRequest, "searchMode" | "knowledgeBaseIds" | "model">;
 
-interface StoredMessage {
+interface StoredMessageBase {
   id: string;
-  role: "user" | "assistant";
   text: string;
   sources: Evidence[];
-  status: MessageStatus;
   createdAt: Date;
 }
+
+// assistant-ui 只允许 assistant 消息携带生成状态。用判别联合在类型层面
+// 阻止 user 消息误带 status，避免运行时校验直接终止整个聊天页面。
+type StoredMessage = StoredMessageBase & (
+  | { role: "user" }
+  | { role: "assistant"; status: MessageStatus }
+);
 
 interface PersistedCitation {
   id: string;
@@ -91,7 +97,6 @@ export function RagRuntimeProvider({
       role: "user",
       text: getAppendText(message),
       sources: [],
-      status: { type: "complete", reason: "stop" },
       createdAt: new Date(),
     };
     const assistantId = crypto.randomUUID();
@@ -127,7 +132,7 @@ export function RagRuntimeProvider({
         controller.signal,
         (event) => {
           setMessages((current) => current.map((item) => {
-            if (item.id !== assistantId) return item;
+            if (item.id !== assistantId || item.role !== "assistant") return item;
             if (event.type === "token") return { ...item, text: item.text + event.text };
             if (event.type === "citation") return { ...item, sources: [...item.sources, event.evidence] };
             return item;
@@ -138,13 +143,18 @@ export function RagRuntimeProvider({
       onConversationChanged?.();
     } catch (error) {
       const cancelled = controller.signal.aborted;
-      setMessages((current) => current.map((item) => item.id === assistantId ? {
+      const errorMessage = cancelled
+        ? "已停止生成。"
+        : error instanceof ChatStreamError
+          ? error.message
+          : toUserFacingChatError("CHAT_FAILED");
+      setMessages((current) => current.map((item) => item.id === assistantId && item.role === "assistant" ? {
         ...item,
-        text: item.text || (cancelled ? "已停止生成。" : "生成失败，请稍后重试。"),
+        text: item.text || errorMessage,
         status: {
           type: "incomplete",
           reason: cancelled ? "cancelled" : "error",
-          error: cancelled ? undefined : { message: error instanceof Error ? error.message : "Unknown error" },
+          error: cancelled ? undefined : { message: errorMessage },
         },
       } : item));
     } finally {
@@ -170,9 +180,8 @@ export function RagRuntimeProvider({
 }
 
 function persistedToStored(row: PersistedMessage): StoredMessage {
-  return {
+  const message: StoredMessageBase = {
     id: row.id,
-    role: row.role as "user" | "assistant",
     text: row.content.filter((part) => part.type === "text").map((part) => part.text ?? "").join("\n"),
     sources: (row.citations ?? []).map((citation) => ({
       id: citation.id,
@@ -186,9 +195,11 @@ function persistedToStored(row: PersistedMessage): StoredMessage {
       retrievedAt: citation.created_at,
       metadata: {},
     })),
-    status: { type: "complete", reason: "stop" },
     createdAt: new Date(row.created_at),
   };
+  return row.role === "assistant"
+    ? { ...message, role: "assistant", status: { type: "complete", reason: "stop" } }
+    : { ...message, role: "user" };
 }
 
 function convertMessage(message: StoredMessage): ThreadMessageLike {
@@ -207,13 +218,16 @@ function convertMessage(message: StoredMessage): ThreadMessageLike {
       }];
     }),
   ];
-  return {
+  const converted = {
     id: message.id,
     role: message.role,
     content,
-    status: message.status,
     createdAt: message.createdAt,
   };
+  // 即使底层存储以后增加其他角色，这里也只给 assistant 注入状态字段。
+  return message.role === "assistant"
+    ? { ...converted, role: "assistant" as const, status: message.status }
+    : { ...converted, role: "user" as const };
 }
 
 function getAppendText(message: AppendMessage) {
@@ -224,7 +238,9 @@ function getAppendText(message: AppendMessage) {
 }
 
 function updateStatus(messages: StoredMessage[], id: string, status: MessageStatus) {
-  return messages.map((message) => message.id === id ? { ...message, status } : message);
+  return messages.map((message) => message.id === id && message.role === "assistant"
+    ? { ...message, status }
+    : message);
 }
 
 async function consumeChatStream(
@@ -254,7 +270,7 @@ async function consumeChatStream(
     for (const line of lines) {
       if (!line.trim()) continue;
       const event = JSON.parse(line) as StreamEvent;
-      if (event.type === "error") throw new Error(event.message);
+      if (event.type === "error") throw new ChatStreamError(event.code, event.requestId);
       onEvent(event);
     }
   }

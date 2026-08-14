@@ -28,14 +28,14 @@ docker-compose.yml       LiteLLM、Phoenix、Valkey、TEI
 
 要求 Node.js 22+、pnpm 11、Python 3.12、Docker Desktop 和 Supabase CLI。
 
-1. 复制 `.env.example` 为 `apps/web/.env.local`，填写本地 Supabase publishable/anon key。密钥不要提交 Git。
+1. 复制 `.env.example` 为根目录 `.env`，填写本地 Supabase publishable/anon key、LiteLLM master key 等配置。Web 启动脚本会显式加载这一个文件，Docker Compose 也读取它，避免根目录与 `apps/web/.env.local` 的同名变量互相覆盖。密钥不要提交 Git。
 2. 执行 `supabase start` 应用全部迁移。
-3. 执行 `docker compose --profile models up -d` 启动 LiteLLM、Phoenix、embedding 与 reranker。没有模型服务时，聊天仍可运行但知识库召回会降级为空。
+3. 执行 `docker compose --profile models up -d` 启动 LiteLLM、Phoenix、embedding 与 reranker。LiteLLM 会把成功和失败调用通过 OTLP 写入 Phoenix，可在 `http://127.0.0.1:6006` 查看延迟、token、异常与模型 trace。没有模型服务时，聊天仍可运行但知识库召回会降级为空。
 4. 执行 `pnpm dev` 启动 Web。
 5. 在 `workers/ingestion` 执行 `uv sync --all-groups`，配置 Worker 的 `SUPABASE_DB_URL`、`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 后运行 `uv run rag-ingestion-worker`。
 6. 再配置 `EVALUATION_WORKER_TOKEN`（Web 与 Worker 必须相同），运行 `uv run rag-operations-worker`，消费评测与删除队列。
 
-开发环境可设置 `ALLOW_MOCK_LLM=true`；生产必须设置为 `false`，并配置 `GOOGLE_API_KEY` 与 LiteLLM master key。设置 `REQUIRE_AUTH=true` 可禁止匿名聊天。
+开发环境可设置 `ALLOW_MOCK_LLM=true`；调用真实 Gemini 时设为 `false`，并配置 `GOOGLE_API_KEY` 与 LiteLLM master key。设置 `REQUIRE_AUTH=true` 会禁止匿名聊天，未登录时页面会明确提示登录。
 
 ## 自定义模型
 
