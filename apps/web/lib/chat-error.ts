@@ -5,6 +5,7 @@ export type PublicChatErrorCode =
   | "INVALID_SESSION"
   | "INVALID_REQUEST"
   | "PERSISTENCE_FAILED"
+  | "RETRIEVAL_UNAVAILABLE"
   | "CHAT_FAILED";
 
 export interface PublicChatError {
@@ -17,6 +18,7 @@ const publicMessages: Record<PublicChatErrorCode, string> = {
   INVALID_SESSION: "登录状态已失效，请重新登录。",
   INVALID_REQUEST: "聊天请求格式不正确，请刷新页面后重试。",
   PERSISTENCE_FAILED: "会话保存失败，请检查 Supabase 服务后重试。",
+  RETRIEVAL_UNAVAILABLE: "知识库检索服务暂时不可用，请检查 embedding 服务后重试。",
   CHAT_FAILED: "模型生成失败，请检查 LiteLLM 和模型配置后重试。",
 };
 
@@ -42,6 +44,9 @@ export function toPublicChatError(error: unknown): PublicChatError {
   if (message === "INVALID_SESSION") return fromCode("INVALID_SESSION");
   if (/^(CONVERSATION|MESSAGE|SUMMARY|ASSISTANT)_(WRITE|READ)_FAILED:/.test(message)) {
     return fromCode("PERSISTENCE_FAILED");
+  }
+  if (/^KNOWLEDGE_RETRIEVAL_(UNAVAILABLE|FAILED)/.test(message)) {
+    return fromCode("RETRIEVAL_UNAVAILABLE");
   }
   return fromCode("CHAT_FAILED");
 }

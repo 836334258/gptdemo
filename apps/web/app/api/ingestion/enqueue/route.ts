@@ -3,6 +3,12 @@ import { z } from "zod";
 
 export const runtime = "nodejs";
 
+interface EnqueuedJob {
+  document_id?: string;
+  job_id?: string;
+  queue_message_id?: number;
+}
+
 const EnqueueSchema = z.object({
   documentId: z.string().uuid(),
   jobId: z.string().uuid(),
@@ -54,7 +60,22 @@ export async function POST(request: Request) {
     p_idempotency_key: body.idempotencyKey,
   });
   if (error) {
-    return Response.json({ code: "ENQUEUE_FAILED", message: error.message }, { status: 403 });
+    // 数据库原始错误可能包含表名和约束名，不直接暴露给页面；服务端日志保留
+    // PostgREST code/message，既方便排障，也避免把内部结构交给普通用户。
+    console.error("[ingestion] enqueue failed", { code: error.code, message: error.message });
+    if (error.code === "42501") {
+      return Response.json({ code: "INGESTION_FORBIDDEN", message: "没有该知识库的上传权限。" }, { status: 403 });
+    }
+    if (error.code === "23505") {
+      return Response.json({ code: "DOCUMENT_CONFLICT", message: "文件已存在或正在处理，请刷新任务列表。" }, { status: 409 });
+    }
+    return Response.json({ code: "ENQUEUE_FAILED", message: "创建索引任务失败，请稍后重试。" }, { status: 500 });
   }
-  return Response.json({ job: Array.isArray(data) ? data[0] : data }, { status: 202 });
+  const job = (Array.isArray(data) ? data[0] : data) as EnqueuedJob | null;
+  // 每次页面上传都会生成新 UUID；RPC 返回不同 UUID 说明命中了同一知识库、
+  // 同一内容哈希的既有幂等任务，不需要再次向 PGMQ 发送消息。
+  const reused = Boolean(job && (
+    job.document_id !== body.documentId || job.job_id !== body.jobId
+  ));
+  return Response.json({ job, reused }, { status: 202 });
 }

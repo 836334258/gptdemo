@@ -32,7 +32,7 @@ docker-compose.yml       LiteLLM、Phoenix、Valkey、TEI
 2. 执行 `supabase start` 应用全部迁移。
 3. 执行 `docker compose --profile models up -d` 启动 LiteLLM、Phoenix、embedding 与 reranker。LiteLLM 会把成功和失败调用通过 OTLP 写入 Phoenix，可在 `http://127.0.0.1:6006` 查看延迟、token、异常与模型 trace。没有模型服务时，聊天仍可运行但知识库召回会降级为空。
 4. 执行 `pnpm dev` 启动 Web。
-5. 在 `workers/ingestion` 执行 `uv sync --all-groups`，配置 Worker 的 `SUPABASE_DB_URL`、`SUPABASE_URL`、`SUPABASE_SERVICE_ROLE_KEY` 后运行 `uv run rag-ingestion-worker`。
+5. 在 `workers/ingestion` 执行 `uv sync --all-groups`，回到根目录运行 `powershell -ExecutionPolicy Bypass -File .\scripts\start-ingestion-worker.ps1`。Worker 会按源码位置读取仓库根 `.env`；脚本会将本地 Supabase 的 service role key 仅注入 Worker 子进程，不打印、不写入 `.env`。生产环境请改用 Secret Manager/Kubernetes Secret，且不得使用 `NEXT_PUBLIC_` 前缀或进入浏览器。
 6. 再配置 `EVALUATION_WORKER_TOKEN`（Web 与 Worker 必须相同），运行 `uv run rag-operations-worker`，消费评测与删除队列。
 
 开发环境可设置 `ALLOW_MOCK_LLM=true`；调用真实 Gemini 时设为 `false`，并配置 `GOOGLE_API_KEY` 与 LiteLLM master key。设置 `REQUIRE_AUTH=true` 会禁止匿名聊天，未登录时页面会明确提示登录。

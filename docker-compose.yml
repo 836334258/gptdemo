@@ -58,7 +58,20 @@ services:
   embedding:
     profiles: ["models"]
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
-    command: ["--model-id", "BAAI/bge-m3", "--port", "80"]
+    # CPU TEI 默认会以 16384 batch tokens 和大量 tokenizer worker 预热，
+    # BGE-M3 在 Docker Desktop 15 GiB 限额下会瞬时占用约 12 GiB 并被 137 终止。
+    # 知识库 chunk 远小于 2048 tokens，收紧动态批处理不改变模型或 1024 维向量。
+    command:
+      - "--model-id"
+      - "BAAI/bge-m3"
+      - "--port"
+      - "80"
+      - "--max-batch-tokens"
+      - "2048"
+      - "--max-concurrent-requests"
+      - "32"
+      - "--tokenization-workers"
+      - "2"
     ports:
       - "8081:80"
     volumes:
@@ -67,7 +80,17 @@ services:
   reranker:
     profiles: ["models"]
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9
-    command: ["--model-id", "Alibaba-NLP/gte-multilingual-reranker-base", "--port", "80"]
+    command:
+      - "--model-id"
+      - "Alibaba-NLP/gte-multilingual-reranker-base"
+      - "--port"
+      - "80"
+      - "--max-batch-tokens"
+      - "2048"
+      - "--max-concurrent-requests"
+      - "16"
+      - "--tokenization-workers"
+      - "2"
     ports:
       - "8082:80"
     volumes:

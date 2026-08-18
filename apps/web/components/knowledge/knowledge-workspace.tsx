@@ -152,13 +152,17 @@ export function KnowledgeWorkspace() {
         idempotencyKey: `${kb.id}:${hash}`,
       }),
     });
-    const result = await response.json() as { code?: string; message?: string };
+    const result = await response.json() as { code?: string; message?: string; reused?: boolean };
     if (!response.ok && !alreadyExists) {
       // 入队事务失败时回收本次新上传的对象；已有对象不能删除，因为旧任务可能仍引用它。
       await supabase.storage.from("rag-private").remove([storagePath]);
     }
     setBusy(false);
-    setNotice(response.ok ? "文件已进入解析队列。" : result.message ?? result.code ?? "入队失败");
+    setNotice(response.ok
+      ? result.reused
+        ? "该文件已经上传过，已返回原索引任务。"
+        : "文件已进入解析队列。"
+      : result.message ?? result.code ?? "入队失败");
     if (response.ok) {
       formElement.reset();
       await refresh();

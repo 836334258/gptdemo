@@ -38,7 +38,7 @@ export async function retrieveKnowledge(
       kb_ids: knowledgeBaseIds,
       match_count: config.RETRIEVAL_CANDIDATE_LIMIT,
     });
-    if (error) throw new Error(`Knowledge retrieval failed: ${error.message}`);
+    if (error) throw new Error(`KNOWLEDGE_RETRIEVAL_FAILED: ${error.message}`);
     return (data ?? []) as HybridRow[];
   }));
 
@@ -89,11 +89,14 @@ async function createEmbeddings(texts: string[]): Promise<number[][]> {
       body: JSON.stringify({ inputs: texts, normalize: true }),
       signal: AbortSignal.timeout(15_000),
     });
-    if (!response.ok) return [];
+    if (!response.ok) {
+      throw new Error(`Embedding service returned ${response.status}`);
+    }
     return (await response.json()) as number[][];
-  } catch {
-    // 开发环境没有启动 TEI 时允许继续聊天；生产监控会把这一情况记为检索降级。
-    return [];
+  } catch (error) {
+    // 用户明确选了知识库时，不能把基础设施故障伪装成“无相关文档”，
+    // 否则模型会基于空证据给出误导性回答。原始异常保留在 cause 中供服务端日志排障。
+    throw new Error("KNOWLEDGE_RETRIEVAL_UNAVAILABLE", { cause: error });
   }
 }
 
